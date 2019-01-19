@@ -354,7 +354,7 @@ message:                           .word 0xDEADBEEF
 
 // Kernel payload
 payload_start:
-.incbin "payload.bin.gz", 0xa // skip gzip header
+.incbin "payload.bin", 0x0
 payload_end:
 .set payload_size, payload_end - payload_start
 .balign 0x4
