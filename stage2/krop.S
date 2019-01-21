@@ -41,8 +41,6 @@
 .equ SceSysmem_ksceKernelGetMemBlockBase,         0x5849
 .equ SceSysmem_ksceKernelAllocMemBlock,           0x7d3d
 .equ SceSysmem_ksceKernelRemapBlock,              0x7f69
-.equ SceSysmem_ksceKernelFreeMemBlock,            0x825d
-.equ SceSysmem_ksceDeflateDecompress,             0x1c3bb
 .equ SceSysmem_ksceKernelMemcpyUserToKernel,      0x6289
 .equ SceSysmem_ksceKernelCpuDcacheWritebackRange, 0x22fcd
 
