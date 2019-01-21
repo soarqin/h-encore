@@ -35,7 +35,7 @@
 
 // arithmetic
 .equ SceSysmem_adds_r0_1_bx_lr,                   0x533b
-.equ SceSysmem_add_r1_sp_bc_mov_r2_r6_blx_r3,     0x1d97d
+.equ SceSysmem_add_r1_sp_c4_mov_r2_r6_blx_r3,     0x1d7a3
 .equ SceSysmem_sub_r1_r1_r3_bx_lr,                0x86d
 
 // functions
@@ -215,8 +215,8 @@
   push 9, 0xDEADBEEF                                  // r5
   push 1, SceSysmem_pop_pc                            // r6
   push 9, 0xDEADBEEF                                  // r7
-  push 1, SceSysmem_add_r1_sp_bc_mov_r2_r6_blx_r3     // pc
-  push 0, 0x1c + 0xbc + difference                    // r3
+  push 1, SceSysmem_add_r1_sp_c4_mov_r2_r6_blx_r3     // pc
+  push 0, 0x1c + 0xc4 + difference                    // r3
   push 1, SceSysmem_blx_r4_pop_r4_pc                  // pc
   push 9, 0xDEADBEEF                                  // r4
   push 1, SceSysmem_mov_sp_r1_blx_r2                  // pc
