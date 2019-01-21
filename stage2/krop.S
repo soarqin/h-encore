@@ -81,7 +81,7 @@
   push 1, SceSysmem_pop_r0_r1_r2_r3_r4_pc             // pc
   push 1, SceSysmem_empty_string                      // r0
   push 0, SCE_KERNEL_MEMBLOCK_TYPE_KERNEL_RW          // r1
-  push 0, MAX_PAYLOAD_SIZE                   // r2
+  push 0, MAX_PAYLOAD_SIZE                            // r2
   push 0, NULL                                        // r3
   push 1, SceSysmem_ksceKernelAllocMemBlock           // r4
   push 1, SceSysmem_blx_r4_pop_r4_pc                  // pc
@@ -103,7 +103,7 @@
   push 1, SceSysmem_ldr_r0_r0_blx_r3                  // pc
   push 9, 0xDEADBEEF                                  // r4
 
-  // Copy compressed payload from user to code block
+  // Copy payload from user to kernel code block
   push 1, SceSysmem_pop_r0_r1_r2_r3_r4_pc             // pc
   push 2, payload_code_block                          // r0
   push 0, payload_start                               // r1
