@@ -28,7 +28,7 @@ clean:
 	-rm bootstrap/res/henkaku.skprx
 	-rm bootstrap/res/henkaku.suprx
 	-rm payload/bootstrap.h
-	-rm stage2/payload.bin.gz
+	-rm stage2/payload.bin
 	cd payload; make clean
 	cd stage2; make clean
 	cd stage1; make clean
