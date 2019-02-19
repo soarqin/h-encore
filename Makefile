@@ -4,7 +4,7 @@ all:
 	make exploit
 
 exploit:
-	cd payload; make
+	cd payload; make; cp payload.bin ../stage2/payload.bin
 	cd stage2; make
 	cd stage1; make
 	./scripts/obfuscate.py stage1/stage1.bin 1
