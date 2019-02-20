@@ -10,7 +10,7 @@
 .equ KSTACK_SIZE,                                 0x1000
 .equ KSTACK_DEVCTL_INDATA_OFFSET,                 0x6f8
 .equ KSTACK_SYSMEM_OFFSET,                        0x89c
-.equ SCE_SYSMEM_OFFSET,                           -0x1697
+.equ SCE_SYSMEM_OFFSET,                           -0x3e67
 
 // call
 .equ SceSysmem_blx_r0,                            0x1fb3f
@@ -19,29 +19,29 @@
 // load
 .equ SceSysmem_pop_pc,                            0x347
 .equ SceSysmem_pop_r0_pc,                         0x31
-.equ SceSysmem_pop_r0_r1_r2_r3_r4_pc,             0x258bd
-.equ SceSysmem_pop_r3_pc,                         0x1d8f
-.equ SceSysmem_pop_r3_r4_r5_r6_r7_pc,             0xf59
-.equ SceSysmem_ldr_r0_r0_blx_r3,                  0x11337
+.equ SceSysmem_pop_r0_r1_r2_r3_r4_pc,             0x258fd
+.equ SceSysmem_pop_r3_pc,                         0x1b4d
+.equ SceSysmem_pop_r3_r4_r5_r6_r7_pc,             0x103f
+.equ SceSysmem_ldr_r0_r0_blx_r3,                  0xd51b
 
 // store
-.equ SceSysmem_str_r0_r4_movs_r0_0_pop_r4_pc,     0x4f71
+.equ SceSysmem_str_r0_r4_movs_r0_0_pop_r4_pc,     0x163d
 
 // move
-.equ SceSysmem_mov_r2_r5_blx_r6,                  0x11e07
-.equ SceSysmem_movs_r5_r0_blx_r2,                 0x11129
+.equ SceSysmem_mov_r2_r5_blx_r6,                  0x113d7
+.equ SceSysmem_movs_r5_r0_blx_r2,                 0xd30d
 .equ SceSysmem_mov_sp_r1_blx_r2,                  0x67
 
 // arithmetic
-.equ SceSysmem_adds_r0_1_bx_lr,                   0x533b
+.equ SceSysmem_adds_r0_1_bx_lr,                   0x1a07
 .equ SceSysmem_add_r1_sp_bc_mov_r2_r6_blx_r3,     0x1d97d
 .equ SceSysmem_sub_r1_r1_r3_bx_lr,                0x86d
 
 // functions
-.equ SceSysmem_ksceKernelGetMemBlockBase,         0x5849
-.equ SceSysmem_ksceKernelAllocMemBlock,           0x7d3d
-.equ SceSysmem_ksceKernelRemapBlock,              0x7f69
-.equ SceSysmem_ksceKernelMemcpyUserToKernel,      0x6289
+.equ SceSysmem_ksceKernelGetMemBlockBase,         0x1f15
+.equ SceSysmem_ksceKernelAllocMemBlock,           0xa521
+.equ SceSysmem_ksceKernelRemapBlock,              0xa74d
+.equ SceSysmem_ksceKernelMemcpyUserToKernel,      0x825d
 .equ SceSysmem_ksceKernelCpuDcacheWritebackRange, 0x22fcd
 
 // misc
