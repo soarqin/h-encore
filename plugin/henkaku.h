@@ -16,7 +16,7 @@ int taiReloadConfig(void);
 /** Logging function */
 #ifdef ENABLE_LOGGING
 #ifdef __VITA_KERNEL__
-#define LOG(fmt, ...) printf("[%s:%d] " fmt "\n", __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define LOG(fmt, ...) ksceDebugPrintf("[%s:%d] " fmt "\n", __FUNCTION__, __LINE__, ##__VA_ARGS__)
 #else
 #define LOG(fmt, ...) sceClibPrintf("[%s:%d] " fmt "\n", __FUNCTION__, __LINE__, ##__VA_ARGS__)
 #endif
@@ -37,6 +37,6 @@ typedef struct {
 #define HENKAKU_CONFIG_MAGIC (0x4C434C4D)
 #define CONFIG_PATH "ur0:tai/henkaku_config.bin"
 #define OLD_CONFIG_PATH "ux0:temp/app_work/MLCL00001/rec/config.bin"
-#define SPOOF_VERSION (0x3680000)
+#define SPOOF_VERSION (0x3700000)
 
 #endif // HENKAKU_HEADER
