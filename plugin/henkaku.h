@@ -16,7 +16,7 @@ int taiReloadConfig(void);
 /** Logging function */
 #ifdef ENABLE_LOGGING
 #ifdef __VITA_KERNEL__
-#define LOG(fmt, ...) ksceDebugPrintf("[%s:%d] " fmt "\n", __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define LOG(fmt, ...) printf("[%s:%d] " fmt "\n", __FUNCTION__, __LINE__, ##__VA_ARGS__)
 #else
 #define LOG(fmt, ...) sceClibPrintf("[%s:%d] " fmt "\n", __FUNCTION__, __LINE__, ##__VA_ARGS__)
 #endif

@@ -47,6 +47,7 @@ enum Items {
   EXIT,
   INSTALL_HENKAKU,
   DOWNLOAD_VITASHELL,
+  PERSONALIZE_SAVEDATA,
   RESET_TAIHEN_CONFIG
 };
 
@@ -54,10 +55,20 @@ const char *items[] = {
   "Exit",
   "Install HENkaku",
   "Download VitaShell",
+  "Personalize savedata",
   "Reset taiHEN config.txt"
 };
 
 #define N_ITEMS (sizeof(items) / sizeof(char *))
+
+int __attribute__((naked, noinline)) call_syscall(int a1, int a2, int a3, int num) {
+  __asm__ (
+    "mov r12, %0 \n"
+    "svc 0 \n"
+    "bx lr \n"
+    : : "r" (num)
+  );
+}
 
 int write_file(const char *file, const void *buf, int size) {
   SceUID fd = sceIoOpen(file, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
@@ -368,13 +379,63 @@ int reset_taihen_config() {
   return 0;
 }
 
-int __attribute__((naked, noinline)) call_syscall(int a1, int a2, int a3, int num) {
-  __asm__ (
-    "mov r12, %0 \n"
-    "svc 0 \n"
-    "bx lr \n"
-    : : "r" (num)
-  );
+int personalize_savedata(int syscall_id) {
+  int res;
+  int fd;
+  uint64_t aid;
+
+  res = call_syscall(sceKernelGetProcessId(), 0, 0, syscall_id + 4);
+  if (res < 0 && res != 0x80800003)
+    return res;
+
+  res = sceRegMgrGetKeyBin("/CONFIG/NP", "account_id", &aid, sizeof(uint64_t));
+  if (res < 0)
+    return res;
+
+  fd = sceIoOpen("savedata0:sce_sys/param.sfo", SCE_O_RDWR, 0777);
+  if (fd < 0)
+    return fd;
+
+  sceIoLseek(fd, 0xe4, SCE_SEEK_SET);
+  sceIoWrite(fd, &aid, sizeof(uint64_t));
+  sceIoClose(fd);
+
+  return 0;
+}
+
+int enter_cross = 0;
+uint32_t old_buttons = 0, current_buttons = 0, pressed_buttons = 0;
+
+void read_pad(void) {
+  SceCtrlData pad;
+  sceCtrlPeekBufferPositive(0, &pad, 1);
+
+  old_buttons = current_buttons;
+  current_buttons = pad.buttons;
+  pressed_buttons = current_buttons & ~old_buttons;
+}
+
+int wait_confirm(const char *msg) {
+  printf(msg);
+  printf(" > Press %c to confirm or %c to decline.\n", enter_cross ? 'X' : 'O', enter_cross ? 'O' : 'X');
+
+  while (1) {
+    read_pad();
+
+    if ((enter_cross && pressed_buttons & SCE_CTRL_CROSS) ||
+        (!enter_cross && pressed_buttons & SCE_CTRL_CIRCLE)) {
+      return 1;
+    }
+
+    if ((enter_cross && pressed_buttons & SCE_CTRL_CIRCLE) ||
+        (!enter_cross && pressed_buttons & SCE_CTRL_CROSS)) {
+      return 0;
+    }
+
+    sceKernelDelayThread(10 * 1000);
+  }
+
+  return 0;
 }
 
 void print_result(int res) {
@@ -409,8 +470,6 @@ void _start() __attribute__ ((weak, alias ("module_start")));
 int module_start(SceSize args, void *argp) {
   SceAppUtilInitParam init_param;
   SceAppUtilBootParam boot_param;
-  SceCtrlData pad;
-  uint32_t old_buttons, current_buttons, pressed_buttons;
   int syscall_id;
   int enter_button;
   int sel;
@@ -428,21 +487,16 @@ int module_start(SceSize args, void *argp) {
   sceAppUtilInit(&init_param, &boot_param);
 
   sceAppUtilSystemParamGetInt(SCE_SYSTEM_PARAM_ID_ENTER_BUTTON, &enter_button);
+  enter_cross = enter_button == SCE_SYSTEM_PARAM_ENTER_BUTTON_CROSS;
 
   psvDebugScreenInit();
   psvDebugScreenClearLineDisable();
 
   sel = 0;
-  old_buttons = 0, current_buttons = 0, pressed_buttons = 0;
-
   print_menu(sel);
 
   while (1) {
-    sceCtrlPeekBufferPositive(0, &pad, 1);
-
-    old_buttons = current_buttons;
-    current_buttons = pad.buttons;
-    pressed_buttons = current_buttons & ~old_buttons;
+    read_pad();
 
     if (pressed_buttons & SCE_CTRL_UP) {
       if (sel > 0)
@@ -462,8 +516,8 @@ int module_start(SceSize args, void *argp) {
       print_menu(sel);
     }
 
-    if ((enter_button == SCE_SYSTEM_PARAM_ENTER_BUTTON_CROSS && pressed_buttons & SCE_CTRL_CROSS) ||
-        (enter_button == SCE_SYSTEM_PARAM_ENTER_BUTTON_CIRCLE && pressed_buttons & SCE_CTRL_CIRCLE)) {
+    if ((enter_cross && pressed_buttons & SCE_CTRL_CROSS) ||
+        (!enter_cross && pressed_buttons & SCE_CTRL_CIRCLE)) {
       psvDebugScreenSetTextColor(AZURE);
 
       if (sel == EXIT) {
@@ -478,10 +532,21 @@ int module_start(SceSize args, void *argp) {
         printf(" > Downloading VitaShell...\n");
         sceKernelDelayThread(500 * 1000);
         res = download_vitashell();
-      } else if (sel == RESET_TAIHEN_CONFIG) {
-        printf(" > Resetting taiHEN config.txt...\n");
+      } else if (sel == PERSONALIZE_SAVEDATA) {
+        printf(" > Personalizing savedata...\n");
         sceKernelDelayThread(500 * 1000);
-        res = reset_taihen_config();
+        res = personalize_savedata(syscall_id);
+      } else if (sel == RESET_TAIHEN_CONFIG) {
+        if (wait_confirm(" > Are you sure you want to reset taiHEN config.txt?\n")) {
+          printf(" > Resetting taiHEN config.txt...\n");
+          sceKernelDelayThread(500 * 1000);
+          res = reset_taihen_config();
+        } else {
+          sel = 0;
+          psvDebugScreenClear();
+          print_menu(sel);
+          continue;
+        }
       }
 
       print_result(res);
@@ -509,7 +574,7 @@ int module_start(SceSize args, void *argp) {
   // Write taiHEN configs if both at ur0: and ux0: don't exist
   if (!exists("ur0:tai/config.txt") &&
       !exists("ux0:tai/config.txt")) {
-    printf(" > Resetting taiHEN config.txt...\n");
+    printf(" > Writing taiHEN config.txt...\n");
     sceKernelDelayThread(500 * 1000);
     res = reset_taihen_config();
     print_result(res);
@@ -531,7 +596,7 @@ int module_start(SceSize args, void *argp) {
 
   if (res < 0 && res != 0x8002D013 && res != 0x8002D017) {
     printf(" > Failed to load HENkaku! 0x%08X\n", res);
-    printf(" > Please relaunch the exploit and reinstall HENkaku.\n");
+    printf(" > Please relaunch the exploit and select 'Install HENkaku'.\n");
     sceKernelDelayThread(5 * 1000 * 1000);
   }
 

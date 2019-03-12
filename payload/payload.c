@@ -244,6 +244,7 @@ static int (*ksceIoOpen)(const char *, int, int) = 0;
 static int (*ksceIoWrite)(int, char *, int) = 0;
 static int (*ksceIoClose)(int) = 0;
 static int (*ksceAppMgrLaunchAppByPath)(const char *name, const char *cmd, int cmdlen, int, void *, void *) = 0;
+static int (*ksceAppMgrDestroyOtherAppByPid)(int pid) = 0;
 static int (*ksceKernelLoadModule)(const char *path, int flags, int *opt) = 0;
 static int (*ksceKernelStartModule)(int modid, int argc, void *args, int flags, void *opt, int *res) = 0;
 static void (*ksceKernelSetSyscall)(u32_t num, void *function) = 0;
@@ -255,6 +256,7 @@ static int (*ksceKernelExitDeleteThread)() = 0;
 static int (*ksceKernelGetMemBlockBase)(int uid, void **base) = 0;
 static int (*ksceKernelGetProcessInfo)(int pid, int *data) = 0;
 static int (*ksceKernelGetProcessLocalStorageAddrForPid)(int pid, int key, void **out_addr, int create_if_doesnt_exist) = 0;
+static int (*ksceCtrlPeekBufferPositive)(int port, void *pad_data, int count) = 0;
 
 // context for the hooks
 static unsigned g_homebrew_decrypt = 0;
@@ -263,6 +265,7 @@ static module_info_t *scenpdrm_info = 0;
 static module_info_t *appmgr_info = 0;
 static u32_t appmgr_code = 0;
 static u32_t appmgr_size = 0;
+static u32_t appmgr_data = 0;
 static u32_t ngs_data = 0;
 
 // save the block id of our own memory
@@ -273,6 +276,7 @@ static int syscall_id = 0;
 
 // shell
 static int shell_pid = 0;
+static int app_pid = 0;
 
 int hook_SceSblAIMgrForDriver_D78B04A2(void)
 {
@@ -527,15 +531,17 @@ static void find_ux0_data_path_addr() {
 	DACR_OFF(ux0_data_path_addr = from);
 }
 
-static int get_shell_pid(void) {
+static void get_shell_and_app_pid(int *shell_pid, int *app_pid) {
 	unsigned data[0xE8/4];
-	int ret, ppid;
+	int ret, pid, ppid;
 
 	data[0] = sizeof(data);
 	ret = ksceKernelGetProcessInfo(0, data);
+	pid = data[1];
 	ppid = data[5];
 	LOG("ret: %x, ppid: %x", ret, ppid);
-	return ppid;
+	*shell_pid = ppid;
+	*app_pid = pid;
 }
 
 int load_taihen(void) {
@@ -596,8 +602,45 @@ void cleanup_memory(void) {
 	ksceKernelSetSyscall(syscall_id + 1, syscall_stub);
 	ksceKernelSetSyscall(syscall_id + 2, syscall_stub);
 	ksceKernelSetSyscall(syscall_id + 3, syscall_stub);
+	ksceKernelSetSyscall(syscall_id + 4, syscall_stub);
 	LOG("freeing executable memory");
 	return free_and_exit(g_rx_block, ksceKernelFreeMemBlock, lr);
+}
+
+int mount_savedata(int pid) {
+	char mount_point[16];
+	void *info;
+
+	void *(* sceAppMgrFindProcessInfoByPid)(void *data, int pid);
+	int (* sceAppMgrMountById)(int pid, void *info, int id, const char *titleid, const char *path,
+		const char *desired_mount_point, const void *klicensee, char *mount_point);
+
+	switch (appmgr_info->module_nid) {
+		case 0xDBB29DB7: // 3.60 retail
+			sceAppMgrFindProcessInfoByPid = (void *)(appmgr_code + 0x2DE1);
+			sceAppMgrMountById = (void *)(appmgr_code + 0x19B51);
+			break;
+
+		case 0x1C9879D6: // 3.65 retail
+			sceAppMgrFindProcessInfoByPid = (void *)(appmgr_code + 0x2DE1);
+			sceAppMgrMountById = (void *)(appmgr_code + 0x19E61);
+			break;
+
+		case 0x54E2E984: // 3.67 retail
+		case 0xC3C538DE: // 3.68 retail
+			sceAppMgrFindProcessInfoByPid = (void *)(appmgr_code + 0x2DE1);
+			sceAppMgrMountById = (void *)(appmgr_code + 0x19E6D);
+			break;
+
+		default:
+			return -1;
+	}
+
+	info = sceAppMgrFindProcessInfoByPid((void *)(appmgr_data + 0x500), pid);
+	if (!info)
+		return -1;
+
+	return sceAppMgrMountById(pid, info + 0x580, 0x3ED, "PCSG90096", "ux0:user/00/savedata/PCSG90096", "savedata0:", NULL, mount_point);
 }
 
 /* Install path and arguments */
@@ -605,10 +648,19 @@ const char launch_path_ur[] = "ur0:/temp/bootstrap.self";
 const char launch_path_ux[] = "ux0:/data/bootstrap.self";
 const char launch_args[] = "\0\0\0\0-nonsuspendable\0-livearea_off\0";
 
+static int exists(const char *path) {
+	int fd = ksceIoOpen(path, 1, 0);
+	if (fd < 0)
+		return 0;
+	ksceIoClose(fd);
+	return 1;
+}
+
 int thread_main(int args, void *argp) {
 	char real_args[sizeof(launch_args)];
 	int opt[52/4];
 	int ctx[16/4];
+	unsigned pad[0x20/4];
 	const char *launch_path;
 	int fd;
 	int ret;
@@ -621,32 +673,49 @@ int thread_main(int args, void *argp) {
 	memcpy(real_args, launch_args, sizeof(launch_args));
 	*(uint16_t *)&real_args[0] = syscall_id;
 
-	LOG("Loading bootstrap to system");
-	launch_path = launch_path_ux;
-	ret = fd = ksceIoOpen(launch_path, 0x603, 0x6);
-	LOG("ux ksceIoOpen: %x", fd);
-	if (fd < 0) {
-		launch_path = launch_path_ur;
-		fd = ksceIoOpen(launch_path, 0x603, 0x6);
-		LOG("ur ksceIoOpen: %x", fd);
-	}
-	if (fd >= 0) {
-		ret = ksceIoWrite(fd, bootstrap_self, bootstrap_self_len);
-		LOG("ksceIoWrite: %x", ret);
-		ksceIoClose(fd);
-
-		for (int i = 0; i < sizeof(opt)/4; i++) {
-			opt[i] = 0;
+	ksceCtrlPeekBufferPositive(0, pad, 1);
+	if ((pad[2] & (0x200 | 0x800)) ||
+		!exists("ur0:tai/henkaku.suprx") ||
+		!exists("ur0:tai/henkaku.skprx") ||
+		!exists("ur0:tai/taihen.skprx") ||
+		(!exists("ur0:tai/config.txt") &&
+		!exists("ux0:tai/config.txt"))) {
+		LOG("Loading bootstrap to system");
+		launch_path = launch_path_ux;
+		ret = fd = ksceIoOpen(launch_path, 0x603, 0x6);
+		LOG("ux ksceIoOpen: %x", fd);
+		if (fd < 0) {
+			launch_path = launch_path_ur;
+			fd = ksceIoOpen(launch_path, 0x603, 0x6);
+			LOG("ur ksceIoOpen: %x", fd);
 		}
-		opt[0] = sizeof(opt);
-		LOG("Launching bootstrap...");
-		ret = ksceAppMgrLaunchAppByPath(launch_path, real_args, sizeof(launch_args), 0, opt, NULL);
-		LOG("ksceAppMgrLaunchAppByPath: %x", ret);
-	}
-	if (ret < 0) {
-		LOG("unable to write bootstrap!");
-		remove_sigpatches();
+		if (fd >= 0) {
+			ret = ksceIoWrite(fd, bootstrap_self, bootstrap_self_len);
+			LOG("ksceIoWrite: %x", ret);
+			ksceIoClose(fd);
+
+			for (int i = 0; i < sizeof(opt)/4; i++) {
+				opt[i] = 0;
+			}
+			opt[0] = sizeof(opt);
+			LOG("Launching bootstrap...");
+			ret = ksceAppMgrLaunchAppByPath(launch_path, real_args, sizeof(launch_args), 0, opt, NULL);
+			LOG("ksceAppMgrLaunchAppByPath: %x", ret);
+		}
+		if (ret < 0) {
+			LOG("unable to write bootstrap!");
+			remove_sigpatches();
+			remove_pkgpatches();
+			__asm__ volatile ("mov lr, %0\n"
+												"mov r0, %1\n"
+												"bx r0\n" :: "r" (lr), "r" (cleanup_memory) : "r0", "lr");
+			LOG("should not be here!");
+			while (1);
+		}
+	} else {
+		ksceAppMgrDestroyOtherAppByPid(app_pid);
 		remove_pkgpatches();
+		load_taihen();
 		__asm__ volatile ("mov lr, %0\n"
 											"mov r0, %1\n"
 											"bx r0\n" :: "r" (lr), "r" (cleanup_memory) : "r0", "lr");
@@ -663,6 +732,7 @@ int add_syscalls(void) {
 	ksceKernelSetSyscall(syscall_id + 1, remove_pkgpatches);
 	ksceKernelSetSyscall(syscall_id + 2, remove_sigpatches);
 	ksceKernelSetSyscall(syscall_id + 3, cleanup_memory);
+	ksceKernelSetSyscall(syscall_id + 4, mount_savedata);
 	return 0;
 }
 
@@ -698,7 +768,7 @@ void resolve_imports(unsigned sysmem_base) {
 	ret = ksceKernelGetModuleList(0x10005, 0x7FFFFFFF, 1, modlist, &modlist_records);
 	LOG("sceKernelGetModuleList() returned 0x%x", ret);
 	LOG("modlist_records: %d", modlist_records);
-	module_info_t *threadmgr_info = 0, *sblauthmgr_info = 0, *processmgr_info = 0, *display_info = 0, *iofilemgr_info = 0;
+	module_info_t *threadmgr_info = 0, *sblauthmgr_info = 0, *processmgr_info = 0, *ctrl_info = 0, *iofilemgr_info = 0;
 	u32_t modulemgr_data = 0;
 	for (int i = 0; i < modlist_records; ++i) {
 		info.size = sizeof(info);
@@ -719,12 +789,16 @@ void resolve_imports(unsigned sysmem_base) {
 			DACR_OFF(appmgr_info = find_modinfo((u32_t)info.segments[0].vaddr, "SceAppMgr"));
 			DACR_OFF(appmgr_code = (u32_t)info.segments[0].vaddr);
 			DACR_OFF(appmgr_size = (u32_t)info.segments[0].memsz);
+			DACR_OFF(appmgr_data = (u32_t)info.segments[1].vaddr);
 		}
 		if (strcmp(info.name, "SceIofilemgr") == 0) {
 			iofilemgr_info = find_modinfo((u32_t)info.segments[0].vaddr, "SceIofilemgr");
 		}
 		if (strcmp(info.name, "SceProcessmgr") == 0) {
 			processmgr_info = find_modinfo((u32_t)info.segments[0].vaddr, "SceProcessmgr");
+		}
+		if (strcmp(info.name, "SceCtrl") == 0) {
+			ctrl_info = find_modinfo((u32_t)info.segments[0].vaddr, "SceCtrl");
 		}
 		if (strcmp(info.name, "SceNgs") == 0) {
 			DACR_OFF(ngs_data = (u32_t)info.segments[1].vaddr);
@@ -744,6 +818,7 @@ void resolve_imports(unsigned sysmem_base) {
 		ksceIoClose = find_export(iofilemgr_info, 0xf99dd8a3);
 		ksceIoWrite = find_export(iofilemgr_info, 0x21ee91f0);
 		ksceAppMgrLaunchAppByPath = find_export(appmgr_info, 0xB0A37065);
+		ksceAppMgrDestroyOtherAppByPid = find_export(appmgr_info, 0xFC89D33D);
 		ksceKernelLoadModule = find_export(modulemgr_info, 0x86D8D634);
 		ksceKernelStartModule = find_export(modulemgr_info, 0x0675B682);
 		ksceKernelSetSyscall = find_export(modulemgr_info, 0xB427025E);
@@ -755,6 +830,7 @@ void resolve_imports(unsigned sysmem_base) {
 		ksceKernelGetMemBlockBase = find_export(sysmem_info, 0xA841EDDA);
 		ksceKernelGetProcessInfo = find_export(processmgr_info, 0x0AFF3EAE);
 		ksceKernelGetProcessLocalStorageAddrForPid = find_export(processmgr_info, 0xAF80F39C);
+		ksceCtrlPeekBufferPositive = find_export(ctrl_info, 0xEA1D3A34);
 	);
 
 	// BEGIN 3.65-3.68
@@ -776,8 +852,6 @@ void fix_ngs() {
 	uint32_t *blocks;
 	unsigned data[0xE8/4];
 	int pid;
-
-	//debug_print("fix_ngs\n");
 
 	data[0] = sizeof(data);
 	ksceKernelGetProcessInfo(0, data);
@@ -844,7 +918,7 @@ void __attribute__ ((section (".text.start"))) payload(void *rx_block, uint32_t 
 	flash_screen(framebuf, 0xFFFF00FF);
 
 	LOG("+++ Entered kernel payload +++");
-	//LOG("payload=0x%x, size=0x%x, sp=0x%x", payload, rx_size, &ret);
+	LOG("payload=0x%x, size=0x%x, sp=0x%x", payload, rx_size, &ret);
 
 	LOG("resolving imports");
 	resolve_imports(sysmem_base);
@@ -855,8 +929,8 @@ void __attribute__ ((section (".text.start"))) payload(void *rx_block, uint32_t 
 	LOG("set up syscalls starting at id: %x", syscall_id);
 	add_syscalls();
 
-	LOG("getting shell pid");
-	DACR_OFF(shell_pid = get_shell_pid());
+	LOG("getting shell and app pid");
+	DACR_OFF(get_shell_and_app_pid(&shell_pid, &app_pid));
 
 	LOG("adding temporary patches");
 	find_ux0_data_path_addr();

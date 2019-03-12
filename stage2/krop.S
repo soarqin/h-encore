@@ -28,8 +28,6 @@
 .equ SceSysmem_str_r0_r4_movs_r0_0_pop_r4_pc,     0x163d
 
 // move
-.equ SceSysmem_mov_r2_r5_blx_r6,                  0x113d7
-.equ SceSysmem_movs_r5_r0_blx_r2,                 0xd30d
 .equ SceSysmem_mov_sp_r1_blx_r2,                  0x67
 
 // arithmetic
