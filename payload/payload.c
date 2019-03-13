@@ -616,6 +616,11 @@ int mount_savedata(int pid) {
 		const char *desired_mount_point, const void *klicensee, char *mount_point);
 
 	switch (appmgr_info->module_nid) {
+		case 0xDBB29DB7: // 3.60 retail
+			sceAppMgrFindProcessInfoByPid = (void *)(appmgr_code + 0x2DE1);
+			sceAppMgrMountById = (void *)(appmgr_code + 0x19B51);
+			break;
+
 		case 0x1C9879D6: // 3.65 retail
 			sceAppMgrFindProcessInfoByPid = (void *)(appmgr_code + 0x2DE1);
 			sceAppMgrMountById = (void *)(appmgr_code + 0x19E61);
@@ -737,7 +742,7 @@ void resolve_imports(unsigned sysmem_base) {
 
 	// BEGIN 3.65-3.68 specific offsets here, used to find Modulemgr from just sysmem base
 	LOG("sysmem base: 0x%08x", sysmem_base);
-	void *sysmem_data = (void*)(*(u32_t*)((u32_t)(sysmem_base) + 0x26a28) - 0xA0);
+	void *sysmem_data = (void*)(*(u32_t*)((u32_t)(sysmem_base) + 0x26a68) - 0xA0);
 	LOG("sysmem data base: 0x%08x", sysmem_data);
 	modulemgr_base = (*(u32_t*)((u32_t)(sysmem_data) + 0x438c) - 0x40);
 	LOG("modulemgr base: 0x%08x", modulemgr_base);
@@ -747,8 +752,8 @@ void resolve_imports(unsigned sysmem_base) {
 	LOG("modulemgr modinfo: 0x%08x", modulemgr_info);
 
 	DACR_OFF(
-		ksceKernelGetModuleList = find_export(modulemgr_info, 0xB72C75A4);
-		ksceKernelGetModuleInfo = find_export(modulemgr_info, 0xDAA90093);
+		ksceKernelGetModuleList = find_export(modulemgr_info, 0x97CF7B4E);
+		ksceKernelGetModuleInfo = find_export(modulemgr_info, 0xD269F915);
 	);
 
 	LOG("ksceKernelGetModuleList: %08x", ksceKernelGetModuleList);
@@ -807,7 +812,7 @@ void resolve_imports(unsigned sysmem_base) {
 		hook_resume_sbl_89CCDA2C = find_export(sblauthmgr_info, 0x89CCDA2C);
 		hook_resume_sbl_BC422443 = find_export(sblauthmgr_info, 0xBC422443);
 
-		ksceKernelCpuIcacheAndL2WritebackInvalidateRange = find_export(sysmem_info, 0x73E895EA);
+		ksceKernelCpuIcacheAndL2WritebackInvalidateRange = find_export(sysmem_info, 0x19f17bd0);
 		ksceKernelCpuDcacheWritebackRange = find_export(sysmem_info, 0x9CB9F0CE);
 		ksceIoOpen = find_export(iofilemgr_info, 0x75192972);
 		ksceIoClose = find_export(iofilemgr_info, 0xf99dd8a3);
@@ -816,7 +821,7 @@ void resolve_imports(unsigned sysmem_base) {
 		ksceAppMgrDestroyOtherAppByPid = find_export(appmgr_info, 0xFC89D33D);
 		ksceKernelLoadModule = find_export(modulemgr_info, 0x86D8D634);
 		ksceKernelStartModule = find_export(modulemgr_info, 0x0675B682);
-		ksceKernelSetSyscall = find_export(modulemgr_info, 0x2E4A10A0);
+		ksceKernelSetSyscall = find_export(modulemgr_info, 0xB427025E);
 		ksceKernelFreeMemBlock = find_export(sysmem_info, 0x9e1c61);
 		ksceKernelFindMemBlockByAddr = find_export(sysmem_info, 0x8a1742f6);
 		ksceKernelCreateThread = find_export(threadmgr_info, 0xC6674E7D);
@@ -829,11 +834,11 @@ void resolve_imports(unsigned sysmem_base) {
 	);
 
 	// BEGIN 3.65-3.68
-	int *syscall_lo = (int *)(modulemgr_data + 0x2038c);
+	int *syscall_lo = (int *)(modulemgr_data + 0x338);
 	DACR_OFF(
-		syscall_table = (void **) (*((u32_t*)(modulemgr_data + 0x20388)));
+		syscall_table = (void **) (*((u32_t*)(modulemgr_data + 0x334)));
 		syscall_id = (*syscall_lo & 0xFFF) | 1; // id must not be x00
-		syscall_stub = (void *)(modulemgr_base + 0x9fc5);
+		syscall_stub = (void *)(modulemgr_base + 0x8b45);
 	);
 	*syscall_lo = syscall_id + 5;
 	// END 3.65-3.68
